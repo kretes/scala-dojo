@@ -7,7 +7,10 @@ import scala.util.Random
 
 class AntColonySpec extends Specification with ThrownExpectations {
 
-  case class Cord(x: Int, y: Int)
+  case class Cord(x: Int, y: Int) {
+    def +(cord: Cord) = Cord(x + cord.x, y + cord.y)
+
+  }
 
   class Food
 
@@ -15,17 +18,15 @@ class AntColonySpec extends Specification with ThrownExpectations {
 
   case class World(xSize: Int, ySize: Int, basePosition: Cord, ants: Seq[(Cord, Ant)]) {
 
+
+    def isInWorld(cord: Cord): Boolean = (0 to xSize-1).contains(cord.x) && (0 to ySize-1).contains(cord.y)
+
     def randomMove(cord: Cord) = {
-      val (xChange,yChange) = Random.nextInt(4) match {
-        case 0 => (1,0)
-        case 1 => (0,1)
-        case 2 => (-1,0)
-        case 3 => (0,-1)
-      }
-      cord.copy(x=Math.max(0,Math.min(cord.x+xChange,xSize-1)), y=Math.max(0,Math.min(cord.y+yChange,ySize-1)))
+      val potentialMovements = Random.shuffle(Seq(Cord(1, 0), Cord(0, 1), Cord(-1, 0), Cord(0, -1)).filter(potentialMove => isInWorld(cord + potentialMove)))
+      cord + potentialMovements.headOption.getOrElse(Cord(0,0))
     }
 
-    def nextWorld = World(xSize,ySize,basePosition,ants.map {case (cord,ant) => (randomMove(cord),ant)})
+    def nextWorld = World(xSize, ySize, basePosition, ants.map { case (cord, ant) => (randomMove(cord), ant)})
   }
 
   object World {
@@ -37,19 +38,19 @@ class AntColonySpec extends Specification with ThrownExpectations {
     "be in base at first" in {
       val world = World(xSize = 1, ySize = 1, basePosition = Cord(0, 0), antsCount = 1)
 
-      world.ants.toMap.keys must contain(Cord(0,0))
+      world.ants.toMap.keys must contain(Cord(0, 0))
     }
 
     "not move outside of world" in {
       val world = World(xSize = 1, ySize = 1, basePosition = Cord(0, 0), antsCount = 1)
 
-      world.nextWorld.ants.toMap.keys must contain(Cord(0,0))
+      world.nextWorld.ants.toMap.keys must contain(Cord(0, 0))
     }
 
     "move to only allowed position" in {
       val world = World(xSize = 2, ySize = 1, basePosition = Cord(0, 0), antsCount = 1)
 
-      world.nextWorld.ants.toMap.keys must contain(Cord(1,0))
+      world.nextWorld.ants.toMap.keys must contain(Cord(1, 0))
     }
   }
 
