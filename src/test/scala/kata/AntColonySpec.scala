@@ -42,15 +42,18 @@ class AntColonySpec extends Specification with ThrownExpectations {
       cord + potentialMovements.headOption.getOrElse(Cord(0, 0))
     }
 
-    def nextWorld = {
+    def next = {
       val antEatingFood: ((Cord, Ant)) => Boolean = {
         case (cord, ant) => foods.contains(cord)
       }
       val antRandomMove: ((Cord, Ant)) => (Cord, Ant) = {
         case (cord, ant) => (randomMove(cord), ant)
       }
-      val movedAnts: Seq[(Cord, Ant)] = ants.filterNot(antEatingFood) map antRandomMove
-      val newAntsWithFood: Seq[(Cord, Ant)] = (antsWithFood ++ ants.filter(antEatingFood)) map antRandomMove
+      val antInBase: ((Cord, Ant)) => Boolean = {
+        case (cord, ant) => cord == basePosition
+      }
+      val movedAnts: Seq[(Cord, Ant)] = (ants.filterNot(antEatingFood) ++ antsWithFood.filter(antInBase)) map antRandomMove
+      val newAntsWithFood: Seq[(Cord, Ant)] = (antsWithFood.filterNot(antInBase) ++ ants.filter(antEatingFood)) map antRandomMove
       val foodEaten: Set[Cord] = foods.filterNot(ants.filter(antEatingFood).toMap.keySet.contains)
       val pheromonesInAir: Map[Cord, Double] = antsWithFood.map(_._1 -> 1.0).toMap
       World(xSize, ySize, basePosition, movedAnts, newAntsWithFood, foodEaten, pheromonesInAir)
@@ -73,13 +76,13 @@ class AntColonySpec extends Specification with ThrownExpectations {
     "not move outside of world" in {
       val world = World(xSize = 1, ySize = 1, basePosition = Cord(0, 0), antsCount = 1)
 
-      world.nextWorld.ants.toMap.keys must contain(Cord(0, 0))
+      world.next.ants.toMap.keys must contain(Cord(0, 0))
     }
 
     "move to only allowed position" in {
       val world = World(xSize = 2, ySize = 1, basePosition = Cord(0, 0), antsCount = 1)
 
-      world.nextWorld.ants.toMap.keys must contain(Cord(1, 0))
+      world.next.ants.toMap.keys must contain(Cord(1, 0))
     }
 
     "be able to sniff food" in {
@@ -94,11 +97,11 @@ class AntColonySpec extends Specification with ThrownExpectations {
       shuffleFunction = { seq => seq}
       val world = World(xSize = 2, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(1, 0)))
 
-      val nextWorld: World = world.nextWorld
+      val nextWorld: World = world.next
 
       shuffleFunction = { _ => Seq(Cord(-1, 0))}
 
-      val finalWorld: World = nextWorld.nextWorld
+      val finalWorld: World = nextWorld.next
 
       finalWorld.isFoodAt(Cord(0, 0)) must beFalse
       finalWorld.isFoodAt(Cord(1, 0)) must beFalse
@@ -108,15 +111,25 @@ class AntColonySpec extends Specification with ThrownExpectations {
       shuffleFunction = { seq => seq}
       val world = World(xSize = 3, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(2, 0)))
 
-      val nextWorld: World = world.nextWorld.nextWorld
+      val nextWorld: World = world.next.next
 
       shuffleFunction = { _ => Seq(Cord(-1, 0))}
 
-      val finalWorld: World = nextWorld.nextWorld.nextWorld
+      val finalWorld: World = nextWorld.next.next
 
       finalWorld.antsWithFood.toMap.keys must contain(Cord(0, 0))
       finalWorld.pheromoneStrengthAt(Cord(1,0)) must beEqualTo(1.0)
 
+    }
+    
+    "leave food in base" in {
+      shuffleFunction = { seq => seq}
+      val world = World(xSize = 2, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(1, 0)))
+
+      val nextWorld: World = world.next.next.next
+
+      nextWorld.antsWithFood must beEmpty
+      nextWorld.ants.toMap.keys must contain(Cord(1,0))
     }
   }
 
