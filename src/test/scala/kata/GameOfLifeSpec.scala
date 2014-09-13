@@ -3,6 +3,8 @@ package kata
 import org.specs2.matcher.ThrownExpectations
 import org.specs2.mutable.Specification
 
+import scala.collection.immutable.IndexedSeq
+
 class GameOfLifeSpec extends Specification with ThrownExpectations {
 
   case class Cord(x: Int, y: Int) {
@@ -12,12 +14,21 @@ class GameOfLifeSpec extends Specification with ThrownExpectations {
   case class Rectangle(minCord: Cord, maxCord: Cord) {
     def extend(size: Int) = Rectangle(minCord + Cord(-size, -size), maxCord + Cord(size, size))
 
-    def cords = for {x <- minCord.x to maxCord.x
+    def cords :Seq[Cord] = for {x <- minCord.x to maxCord.x
                      y <- minCord.y to maxCord.y} yield Cord(x, y)
 
     def include(cord: Cord): Rectangle = {
       Rectangle(Cord(Math.min(minCord.x, cord.x), Math.min(minCord.y, cord.y)), Cord(Math.max(maxCord.x, cord.x), Math.max(maxCord.y, cord.y)))
     }
+  }
+
+  object NoCord extends Cord(0,0)
+
+  object Empty extends Rectangle(NoCord,NoCord) {
+
+    override def cords: Seq[Cord] = Seq.empty
+
+    override def include(cord: Cord): Rectangle = Rectangle(cord,cord)
   }
 
   case class World(alive: Set[Cord]) {
@@ -28,7 +39,7 @@ class GameOfLifeSpec extends Specification with ThrownExpectations {
 
     def aliveNeighboursCount(cord: Cord): Int = neighbours(cord).count(alive.contains)
 
-    def surroundings = alive.foldLeft(Rectangle(Cord(0, 0), Cord(0, 0))) { (rectangle, cord) => rectangle.include(cord)}.extend(1).cords
+    def surroundings = alive.foldLeft[Rectangle](Empty) { (rectangle, cord) => rectangle.include(cord)}.extend(1).cords
 
     def next = World(alive.filter(willBeAlive) ++ surroundings.filter(aliveNeighboursCount(_) == 3))
 
