@@ -43,8 +43,8 @@ class AntColonySpec extends Specification with ThrownExpectations {
     def isFoodAt(cord: Cord): Boolean = foods.contains(cord)
 
     def randomMove(cord: Cord) = {
-      val potentialMovements = shuffleFunction(Seq(Cord(1, 0), Cord(0, 1), Cord(-1, 0), Cord(0, -1)).filter(potentialMove => isInWorld(cord + potentialMove)))
-      cord + potentialMovements.headOption.getOrElse(Cord(0, 0))
+      val potentialMovement: Option[Cord] = shuffleFunction(Seq(Cord(1, 0), Cord(0, 1), Cord(-1, 0), Cord(0, -1))).find(potentialMove => isInWorld(cord + potentialMove))
+      cord + potentialMovement.getOrElse(Cord(0, 0))
     }
 
     def addValues(map1: Map[Cord, Double], map2: Map[Cord, Double]): Map[Cord, Double] = {
@@ -52,8 +52,8 @@ class AntColonySpec extends Specification with ThrownExpectations {
     }
 
     def neighbourWithHighestPheromoneOrFood(cord: Cord): Cord = {
-      cord.strictNeighbours.filter(isFoodAt(_)).headOption.getOrElse(
-        if (cord.strictNeighbours.map(pheromoneStrengthAt(_)).sum > 0.0) cord.strictNeighbours.maxBy(pheromoneStrengthAt(_)) else randomMove(cord)
+      cord.strictNeighbours.find(isFoodAt).getOrElse(
+        if (cord.strictNeighbours.map(pheromoneStrengthAt).sum > 0.0) cord.strictNeighbours.maxBy(pheromoneStrengthAt) else randomMove(cord)
       )
     }
 
@@ -93,7 +93,7 @@ class AntColonySpec extends Specification with ThrownExpectations {
 
   object World {
     def apply(xSize: Int, ySize: Int, basePosition: Cord, antsCount: Int, foodPositions: Set[Cord] = Set.empty) = {
-      new World(xSize, ySize, basePosition, (0 to antsCount - 1).map(_ => (basePosition -> new Ant)), Seq.empty, foodPositions, Map.empty)
+      new World(xSize, ySize, basePosition, (0 to antsCount - 1).map(_ => basePosition -> new Ant), Seq.empty, foodPositions, Map.empty)
     }
   }
 
