@@ -203,7 +203,7 @@ class AntColonySpec extends Specification with ThrownExpectations {
       nextWorld.ants.toMap.keys must contain(Cord(1, 0))
     }
 
-    "follow pheromones" in {
+    "follow pheromones when going for food" in {
       shuffleFunction = { seq => seq}
       val world = World(xSize = 3, ySize = 3, basePosition = Cord(1, 1), antsCount = 1, foodPositions = Set(Cord(2, 2)))
 
@@ -214,6 +214,7 @@ class AntColonySpec extends Specification with ThrownExpectations {
       finalWorld.ants.toMap.keys must contain(Cord(1, 2))
     }
 
+    "follow pheromones when going with food to base" in pending
     "two ants go with food over the same place - pheromones should be added" in pending
     "two ants are on a position with food - only one should take food" in pending
 
