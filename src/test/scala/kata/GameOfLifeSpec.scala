@@ -9,6 +9,7 @@ class GameOfLifeSpec extends Specification with ThrownExpectations {
 
   case class Cord(x: Int, y: Int) {
     def +(cord: Cord) = Cord(x + cord.x, y + cord.y)
+    def neighbours = Seq(this + Cord(1, 0), this + Cord(-1, 0), this + Cord(0, 1), this + Cord(0, -1), this + Cord(1, 1), this + Cord(1, -1), this + Cord(-1, 1), this + Cord(-1, -1))
   }
 
   case class Rectangle(minCord: Cord, maxCord: Cord) {
@@ -33,11 +34,10 @@ class GameOfLifeSpec extends Specification with ThrownExpectations {
 
   case class World(alive: Set[Cord]) {
 
-    def neighbours(cord: Cord) = Seq(cord + Cord(1, 0), cord + Cord(-1, 0), cord + Cord(0, 1), cord + Cord(0, -1), cord + Cord(1, 1), cord + Cord(1, -1), cord + Cord(-1, 1), cord + Cord(-1, -1))
 
     def willBeAlive(cord: Cord): Boolean = (2 to 3).contains(aliveNeighboursCount(cord))
 
-    def aliveNeighboursCount(cord: Cord): Int = neighbours(cord).count(alive.contains)
+    def aliveNeighboursCount(cord: Cord): Int = cord.neighbours.count(alive.contains)
 
     def surroundings = alive.foldLeft[Rectangle](Empty) { (rectangle, cord) => rectangle.include(cord)}.extend(1).cords
 
