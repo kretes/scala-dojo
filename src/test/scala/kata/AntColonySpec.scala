@@ -13,25 +13,42 @@ class AntColonySpec extends Specification with ThrownExpectations {
 
   case class Cord(x: Int, y: Int) {
     def +(cord: Cord) = Cord(x + cord.x, y + cord.y)
+    def strictNeighbours = Seq(this + Cord(1, 0), this + Cord(-1, 0), this + Cord(0, 1), this + Cord(0, -1))
 
   }
 
   class Food
 
-  class Ant
+  class Ant {
+    def withFood: AntWithFood = AntWithFood(1)
+  }
+
+  case class AntWithFood(turns: Int) {
+
+    println(s"creating with food $turns")
+    def pheromoneLevel: Double = 1.0 / Math.pow(2.0,turns*2)
+
+    def nextTurn: AntWithFood = AntWithFood(turns + 1)
+
+    def leaveFood = new Ant
+  }
 
   //idea
   trait CountingSet[A] {
-    def put(a:A) : CountingSet[A]
-    def count(a:A) : Int
-    def remove(a:A) : CountingSet[A]
+    def put(a: A): CountingSet[A]
+
+    def count(a: A): Int
+
+    def remove(a: A): CountingSet[A]
   }
 
   var shuffleFunction: Seq[Cord] => Seq[Cord] = Random.shuffle _
 
-  case class World(xSize: Int, ySize: Int, basePosition: Cord, ants: Seq[(Cord,Ant)], antsWithFood: Seq[(Cord, Ant)], foods: Set[Cord], pheromones: Map[Cord, Double]) {
+  case class World(xSize: Int, ySize: Int, basePosition: Cord, ants: Seq[(Cord, Ant)], antsWithFood: Seq[(Cord, AntWithFood)], foods: Set[Cord], pheromones: Map[Cord, Double]) {
 
-    def pheromoneStrengthAt(cord: Cord) = pheromones.getOrElse(cord,0)
+    println(s"world with ants $ants withfood $antsWithFood food $foods pher $pheromones")
+
+    def pheromoneStrengthAt(cord: Cord) = pheromones.getOrElse(cord, 0.0)
 
     def isInWorld(cord: Cord): Boolean = (0 to xSize - 1).contains(cord.x) && (0 to ySize - 1).contains(cord.y)
 
@@ -42,32 +59,53 @@ class AntColonySpec extends Specification with ThrownExpectations {
       cord + potentialMovements.headOption.getOrElse(Cord(0, 0))
     }
 
-    def addValues(map1: Map[Cord, Double], map2:Map[Cord, Double]): Map[AntColonySpec.this.type#Cord, Double] = {
-      map2 ++ map1.map {case (cord,value) => (cord,value + map2.getOrElse(cord,0.0))}
+    def addValues(map1: Map[Cord, Double], map2: Map[Cord, Double]): Map[Cord, Double] = {
+      map2 ++ map1.map { case (cord, value) => (cord, value + map2.getOrElse(cord, 0.0))}
+    }
+
+    def neighbourWithHighestPheromoneOrFood(cord: Cord): Cord = {
+      cord.strictNeighbours.filter(isFoodAt(_)).headOption.getOrElse(
+        if (cord.strictNeighbours.map(pheromoneStrengthAt(_)).sum > 0.0) cord.strictNeighbours.maxBy(pheromoneStrengthAt(_)) else randomMove(cord)
+      )
     }
 
     def next = {
-      val antTakingFood: ((Cord, Ant)) => Boolean = {
+      def antTakingFood[T]: ((Cord, T)) => Boolean = {
         case (cord, ant) => foods.contains(cord)
       }
-      val antRandomMove: ((Cord, Ant)) => (Cord, Ant) = {
+      def antPheromoneMove[T]: ((Cord, T)) => (Cord, T) = {
+        case (cord, ant) => (neighbourWithHighestPheromoneOrFood(cord), ant)
+      }
+      def antRandomMove[T]: ((Cord, T)) => (Cord, T) = {
         case (cord, ant) => (randomMove(cord), ant)
       }
-      val antInBase: ((Cord, Ant)) => Boolean = {
+      def toAntWithFood: ((Cord, Ant)) => (Cord, AntWithFood) = {
+        case (cord, ant) => (cord, ant.withFood)
+      }
+      def nextTurn: ((Cord, AntWithFood)) => (Cord, AntWithFood) = {
+        case (cord, antWithFood) => (cord, antWithFood.nextTurn)
+      }
+      def toCurrentPheromoneLevel: ((Cord, AntWithFood)) => (Cord, Double) = {
+        case (cord, antWithFood) => {println((cord, antWithFood, antWithFood.pheromoneLevel)); (cord, antWithFood.pheromoneLevel)}
+      }
+      def antLeaveFood: ((Cord, AntWithFood)) => (Cord, Ant) = {
+        case (cord, antWithFood) => (cord, antWithFood.leaveFood)
+      }
+      val antInBase: ((Cord, Any)) => Boolean = {
         case (cord, ant) => cord == basePosition
       }
-      val movedAnts: Seq[(Cord, Ant)] = (ants.filterNot(antTakingFood) ++ antsWithFood.filter(antInBase)) map antRandomMove
-      val newAntsWithFood: Seq[(Cord, Ant)] = (antsWithFood.filterNot(antInBase) ++ ants.filter(antTakingFood)) map antRandomMove
+      val movedAnts: Seq[(Cord, Ant)] = (ants.filterNot(antTakingFood) ++ antsWithFood.filter(antInBase).map(antLeaveFood)) map antPheromoneMove
+      val newAntsWithFood: Seq[(Cord, AntWithFood)] = (antsWithFood.filterNot(antInBase).map(nextTurn) ++ ants.filter(antTakingFood).map(toAntWithFood)) map antRandomMove
       val foodEaten: Set[Cord] = foods.filterNot(ants.filter(antTakingFood).toMap.keySet.contains)
-      val newPheromones: Map[Cord, Double] = addValues(antsWithFood.map(_._1 -> 1.0).toMap, ants.filter(antTakingFood).map(_._1 -> 1.0).toMap)
-      val pheromonesInAir: Map[Cord, Double] = addValues(newPheromones,pheromones.mapValues(_ / 2.0))
+      val newPheromones: Map[Cord, Double] = addValues(antsWithFood.map(toCurrentPheromoneLevel).toMap, ants.filter(antTakingFood).map(_._1 -> 1.0).toMap) filterNot antInBase
+      val pheromonesInAir: Map[Cord, Double] = addValues(newPheromones, pheromones.mapValues(_ / 2.0))
       World(xSize, ySize, basePosition, movedAnts, newAntsWithFood, foodEaten, pheromonesInAir)
     }
   }
 
   object World {
     def apply(xSize: Int, ySize: Int, basePosition: Cord, antsCount: Int, foodPositions: Set[Cord] = Set.empty) = {
-      new World(xSize, ySize, basePosition, (0 to antsCount-1).map(_ => (Cord(0, 0) -> new Ant)), Seq.empty, foodPositions, Map.empty)
+      new World(xSize, ySize, basePosition, (0 to antsCount - 1).map(_ => (basePosition -> new Ant)), Seq.empty, foodPositions, Map.empty)
     }
   }
 
@@ -123,7 +161,7 @@ class AntColonySpec extends Specification with ThrownExpectations {
       val finalWorld: World = nextWorld.next
 
       finalWorld.antsWithFood.toMap.keys must contain(Cord(1, 0))
-      finalWorld.pheromoneStrengthAt(Cord(2,0)) must beEqualTo(1.0)
+      finalWorld.pheromoneStrengthAt(Cord(2, 0)) must beEqualTo(1.0)
     }
 
     "take food and return to base" in {
@@ -137,7 +175,7 @@ class AntColonySpec extends Specification with ThrownExpectations {
       val finalWorld: World = nextWorld.next.next
 
       finalWorld.antsWithFood.toMap.keys must contain(Cord(0, 0))
-      finalWorld.pheromoneStrengthAt(Cord(1,0)) must beEqualTo(1.0)
+      finalWorld.pheromoneStrengthAt(Cord(1, 0)) must beEqualTo(0.25)
 
     }
 
@@ -148,14 +186,14 @@ class AntColonySpec extends Specification with ThrownExpectations {
       val nextWorld: World = world.next.next
       shuffleFunction = { _ => Seq(Cord(-1, 0))}
       val finalWorld: World = nextWorld.next.next
-      finalWorld.pheromoneStrengthAt(Cord(1,0)) must beEqualTo(1.0)
-      finalWorld.next.pheromoneStrengthAt(Cord(1,0)) must beEqualTo(0.5)
-      finalWorld.next.next.pheromoneStrengthAt(Cord(1,0)) must beEqualTo(0.25)
+      finalWorld.pheromoneStrengthAt(Cord(1, 0)) must beEqualTo(1.0/4)
+      finalWorld.next.pheromoneStrengthAt(Cord(1, 0)) must beEqualTo(1.0/8)
+      finalWorld.next.next.pheromoneStrengthAt(Cord(1, 0)) must beEqualTo(1.0/16)
     }
 
     "pheromone should be additive" in {
       shuffleFunction = { seq => seq}
-      val world = World(xSize = 4, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(2, 0),Cord(3, 0)))
+      val world = World(xSize = 4, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(2, 0), Cord(3, 0)))
 
       val food1Taken: World = world.next.next
       shuffleFunction = { _ => Seq(Cord(-1, 0))}
@@ -164,9 +202,9 @@ class AntColonySpec extends Specification with ThrownExpectations {
       val food2Taken: World = food1Returned.next.next.next
       shuffleFunction = { _ => Seq(Cord(-1, 0))}
       val food2Returned: World = food2Taken.next.next.next
-      food2Returned.pheromoneStrengthAt(Cord(1,0)) must beEqualTo(1.0 + 1.0/64.0)
+      food2Returned.pheromoneStrengthAt(Cord(1, 0)) must beEqualTo(1.0/256 + 1.0/16)
     }
-    
+
     "leave food in base" in {
       shuffleFunction = { seq => seq}
       val world = World(xSize = 2, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(1, 0)))
@@ -174,17 +212,18 @@ class AntColonySpec extends Specification with ThrownExpectations {
       val nextWorld: World = world.next.next.next
 
       nextWorld.antsWithFood must beEmpty
-      nextWorld.ants.toMap.keys must contain(Cord(1,0))
+      nextWorld.ants.toMap.keys must contain(Cord(1, 0))
     }
 
     "follow pheromones" in {
       shuffleFunction = { seq => seq}
-      val world = World(xSize = 2, ySize = 1, basePosition = Cord(0, 0), antsCount = 1, foodPositions = Set(Cord(1, 0)))
+      val world = World(xSize = 3, ySize = 3, basePosition = Cord(1, 1), antsCount = 1, foodPositions = Set(Cord(2, 2)))
 
       val nextWorld: World = world.next.next.next
+      shuffleFunction = { _ => Seq(Cord(0,-1))}
+      val finalWorld: World = nextWorld.next.next
 
-      nextWorld.antsWithFood must beEmpty
-      nextWorld.ants.toMap.keys must contain(Cord(1,0))
+      finalWorld.ants.toMap.keys must contain(Cord(1, 2))
     }
 
     "two ants go with food over the same place - pheromones should be added" in pending
