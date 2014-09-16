@@ -5,11 +5,13 @@ import org.specs2.mutable.Specification
 
 class FibonacciSpec extends Specification with ThrownExpectations {
 
-  def createFibonacciStream(prevprev: Long, prev: Long): Stream[Long] = (prevprev + prev) #:: createFibonacciStream(prev, prevprev + prev)
+  case class FibonacciNumber(previous: Long, current: Long) {
+    lazy val next = FibonacciNumber(current, previous + current)
+  }
 
-  lazy val fibonacci: Stream[Long] = 1 #:: 1 #:: createFibonacciStream(1, 1)
+  object One extends FibonacciNumber(0, 1)
 
-  def fibonacciValue(index: Int) = fibonacci(index - 1)
+  lazy val fibonacci: Stream[Long] = Stream.iterate[FibonacciNumber](One)(number => number.next).map(_.current)
 
   "fibbonacci" should {
     Seq(
@@ -25,7 +27,7 @@ class FibonacciSpec extends Specification with ThrownExpectations {
     ) foreach { case (input, expected) =>
       s"return $expected for $input" in {
 
-        fibonacciValue(input) must beEqualTo(expected)
+        fibonacci(input - 1) must beEqualTo(expected)
       }
     }
   }
