@@ -1,10 +1,10 @@
 package kata
 
-import org.specs2.matcher.ThrownExpectations
 import org.specs2.mutable.Specification
+import org.specs2.specification.AllExpectations
 
 
-object Implicits {
+object PersonImplicits {
 
   implicit class Person(val name: String) extends AnyVal {
 
@@ -21,20 +21,32 @@ object Implicits {
  *
  */
 
-class MarriageSpec extends Specification with ThrownExpectations {
+class MarriageSpec extends Specification with AllExpectations {
 
-  import kata.Implicits._
+  import kata.PersonImplicits._
 
+  def lazyMinBy[A](seq: Iterator[Seq[A]], score: A => Int): Seq[A] = {
+    def minIn(solution: (Int, Seq[A]), seq: Seq[Seq[A]]): (Int, Seq[A]) = {
+      seq match {
+        case Nil => solution
+        case head +: tail => {
+          val growingSums: Stream[Int] = head.toStream.map(score).scanLeft(0)(_ + _)
+          if (growingSums.find(_ > solution._1) == None) minIn((growingSums.last, head), tail)
+          else minIn(solution, tail)
+        }
+      }
+    }
+    minIn((Int.MaxValue, Nil), seq.toStream)._2
+  }
 
   def dating(males: Seq[Person], females: Seq[Person], preference: Person => Seq[Person]): Person => Person = {
-    def score(arrangement: Seq[(Person, Person)]): Int = {
-      arrangement.map { case (men, female) => preference(men).indexOf(female) + preference(female).indexOf(men)}.sum
+    val pairScore: ((Person, Person)) => Int = {
+      case (men, female) => preference(men).indexOf(female) + preference(female).indexOf(men)
     }
 
-    val permutations: Iterator[Seq[Person]] = males.permutations
-    val all: Seq[Seq[(Person, Person)]] = permutations.map(permutatedMales => permutatedMales.zip(females)).toSeq
-    val best: Seq[(Person, Person)] = all.minBy(score)
-    val bestFull: Seq[(Person, Person)] = best.flatMap { pair => Seq(pair,pair.swap) }
+    val all: Iterator[Seq[(Person, Person)]] = males.permutations.map(_.zip(females))
+    val best: Seq[(Person, Person)] = lazyMinBy(all, pairScore)
+    val bestFull: Seq[(Person, Person)] = best.flatMap { pair => Seq(pair, pair.swap)}
     bestFull.toMap
   }
 
@@ -53,14 +65,14 @@ class MarriageSpec extends Specification with ThrownExpectations {
       preference("mary") must beEqualTo[Person]("ken")
     }
 
-    def persons(s:String) = s.trim.split(",").map(_.trim).map(new Person(_)).toSeq
+    def persons(s: String) = s.trim.split(",").map(_.trim).map(new Person(_)).toSeq
     def preferences(s: String) = s.split("\\n").map(_.trim).map(line => new Person(line.split(":")(0)) -> persons(line.split(":")(1))).toSeq.toMap
 
     "find ideal marriages 2" in {
       val males = persons("abe, bob, col, dan, ed, fred, gav, hal, ian, jon")
-      val females= persons("abi, bea, cath, dee, eve, fay, gay, hope, ivy, jan")
+      val females = persons("abi, bea, cath, dee, eve, fay, gay, hope, ivy, jan")
 
-      val malePreferences = preferences("""abe: abi, eve, cath, ivy, jan, dee, fay, bea, hope, gay
+      val malePreferences = preferences( """abe: abi, eve, cath, ivy, jan, dee, fay, bea, hope, gay
       bob: cath, hope, abi, dee, eve, fay, bea, jan, ivy, gay
       col: hope, eve, abi, dee, bea, fay, ivy, gay, cath, jan
       dan: ivy, fay, dee, gay, hope, eve, jan, bea, cath, abi
@@ -71,7 +83,7 @@ class MarriageSpec extends Specification with ThrownExpectations {
       ian: hope, cath, dee, gay, bea, abi, fay, ivy, jan, eve
       jon: abi, fay, jan, gay, eve, bea, dee, cath, ivy, hope""")
 
-      val femalePreferences = preferences("""abi: bob, fred, jon, gav, ian, abe, dan, ed, col, hal
+      val femalePreferences = preferences( """abi: bob, fred, jon, gav, ian, abe, dan, ed, col, hal
       bea: bob, abe, col, fred, gav, dan, ian, ed, jon, hal
       cath: fred, bob, ed, gav, hal, col, ian, abe, dan, jon
       dee: fred, jon, col, abe, ian, hal, gav, dan, bob, ed
@@ -82,23 +94,25 @@ class MarriageSpec extends Specification with ThrownExpectations {
       ivy: ian, col, hal, gav, fred, bob, abe, ed, jon, dan
       jan: ed, hal, gav, abe, bob, jon, col, ian, fred, dan""")
 
-      println(males)
-      println(females)
-      println(malePreferences)
-      println(femalePreferences)
-
       val preference: (Person) => Person = dating(males, females, malePreferences ++ femalePreferences)
 
       preference("dan") must beEqualTo[Person]("fay")
-      preference("col") must beEqualTo[Person]("ivy")
+      preference("col") must beEqualTo[Person]("dee")
       preference("hal") must beEqualTo[Person]("eve")
       preference("gav") must beEqualTo[Person]("gay")
-      preference("fred") must beEqualTo[Person]("dee")
+      preference("fred") must beEqualTo[Person]("bea")
       preference("ed") must beEqualTo[Person]("jan")
-      preference("abe") must beEqualTo[Person]("bea")
+      preference("abe") must beEqualTo[Person]("ivy")
       preference("ian") must beEqualTo[Person]("hope")
       preference("bob") must beEqualTo[Person]("cath")
       preference("jon") must beEqualTo[Person]("abi")
+    }
+  }
+
+  "minFunction" should {
+    "handle infinite streams" in {
+        lazyMinBy[Int](Seq(Seq(1,2,3),Seq(1,3,3),Seq(10,10,10)).iterator,a => a) must beEqualTo(Seq(1,2,3))
+        lazyMinBy[Int](Seq(Seq(1,2,3),Stream.iterate(1)(_ + 1)).iterator,a => a) must beEqualTo(Seq(1,2,3))
     }
   }
 
