@@ -21,7 +21,7 @@ class JamJarsSpec extends Specification with ThrownExpectations {
 
     freshJars
       .sliding(size = jarsInBox, step = jarsInBox).toSeq
-      .map(JarBox(_))
+      .map(JarBox)
   }
 
   "jamjars" should {

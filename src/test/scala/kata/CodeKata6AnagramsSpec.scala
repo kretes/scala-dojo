@@ -11,7 +11,6 @@ class CodeKata6AnagramsSpec extends Specification with ThrownExpectations {
     val input = io.Source.fromInputStream(getClass.getClassLoader.getResourceAsStream(fileName)).getLines().toSeq
 
     input.groupBy(_.sorted).values.filter(_.size > 1).map(_.toSet).toSet
-
   }
 
   "anagram finder" should {

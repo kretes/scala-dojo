@@ -3,6 +3,8 @@ package kata
 import org.specs2.mutable.Specification
 import org.specs2.specification.AllExpectations
 
+import scala.annotation.tailrec
+
 
 object PersonImplicits {
 
@@ -26,6 +28,7 @@ class MarriageSpec extends Specification with AllExpectations {
   import kata.PersonImplicits._
 
   def lazyMinBy[A](seq: Iterator[Seq[A]], score: A => Int): Seq[A] = {
+    @tailrec
     def minIn(solution: (Int, Seq[A]), seq: Seq[Seq[A]]): (Int, Seq[A]) = {
       seq match {
         case Nil => solution
@@ -49,7 +52,6 @@ class MarriageSpec extends Specification with AllExpectations {
     val bestFull: Seq[(Person, Person)] = best.flatMap { pair => Seq(pair, pair.swap)}
     bestFull.toMap
   }
-
 
   "dating service" should {
     "find ideal marriages" in {
